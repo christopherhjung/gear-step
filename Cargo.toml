@@ -1,0 +1,10 @@
+[package]
+name = "gear-step"
+version = "0.1.0"
+edition = "2021"
+description = "Parametric involute gear generator with STEP (AP214) export"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
