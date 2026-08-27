@@ -230,8 +230,8 @@ class View {
     // pushed when a flank is touching it
     this.th1 = 0;        // driver angle, rad
     this.w1 = 0;         // driver speed, rad/s
-    this.beta = 0;       // follower's own angle parameter, rad
-    this.w2 = 0;         // and its speed
+    this.lashPos = 0;    // follower's offset inside the backlash band, rad
+    this.w2 = 0;         // follower speed, rad/s
     this.lashHalf = 0;   // half the angular play, rad
     this.cmd = DEFAULT_RPM * Math.PI / 30;   // commanded speed, sign = sense
     this.opts = { edges: true, spin: false, pair: false };
@@ -280,6 +280,7 @@ class View {
     this.centre = [0, 0, geom.width / 2];
     this.teeth = geom.teeth;
     this.lashHalf = (geom.backlash_rad || 0) / 2;
+    this.lashPos = Math.max(-this.lashHalf, Math.min(this.lashHalf, this.lashPos));
     this.radius = Math.hypot(geom.r_tip, geom.width / 2);
     if (!this.framed) { this.target = this.centre.slice(); this.framed = true; }
     this.dirty = true;
@@ -368,8 +369,6 @@ class View {
     const TAU_COAST = 1.6;    // how long the follower freewheels for, s
     const BOUNCE = 0.12;      // restitution when a flank is struck
     const IMPACT = 0.05;      // rad/s below which contact is a rest, not a hit
-    const half = this.teeth > 0 ? Math.PI / this.teeth : 0;
-
     const cmd = this.opts.spin ? this.cmd : 0;
     const moving = Math.abs(this.w1) > 1e-4 || Math.abs(this.w2) > 1e-4;
     if (!moving && cmd === 0) return;
@@ -377,36 +376,42 @@ class View {
     this.w1 += (cmd - this.w1) * (1 - Math.exp(-dt / TAU_DRIVE));
     this.th1 += this.w1 * dt;
 
-    if (this.lashHalf <= 1e-9) {
-      // no allowance: the pair is rigid
-      this.w2 = this.w1;
-      this.beta = this.th1 + half;
+    const L = this.lashHalf;
+    if (L <= 1e-9) {
+      this.w2 = this.w1;                         // no allowance: rigid pair
+      this.lashPos = 0;
     } else {
       this.w2 *= Math.exp(-dt / TAU_COAST);      // freewheeling
-      this.beta += this.w2 * dt;
-      let u = this.beta - this.th1 - half;       // offset within the band
-      const L = this.lashHalf;
-      if (u > L || u < -L) {
-        u = u > L ? L : -L;
+      this.lashPos += (this.w2 - this.w1) * dt;        // drift inside the band
+      if (this.lashPos > L || this.lashPos < -L) {
+        this.lashPos = this.lashPos > L ? L : -L;
         const rel = this.w2 - this.w1;
         // Only a real approach speed counts as a hit and bounces. Drag alone
         // pressing the follower onto a flank it is already touching is resting
         // contact: it just gets carried, or the pair would buzz for ever.
-        const hit = (u > 0 ? rel > 0 : rel < 0) && Math.abs(rel) > IMPACT;
+        const hit = (this.lashPos > 0 ? rel > 0 : rel < 0) && Math.abs(rel) > IMPACT;
         this.w2 = hit ? this.w1 - BOUNCE * rel : this.w1;
-        this.beta = this.th1 + half + u;
       }
     }
 
-    // keep the angles small so long runs stay precise; a whole turn leaves
-    // the offset between the two untouched
+    // keep the driver angle small so long runs stay precise
     const TWO_PI = Math.PI * 2;
     if (this.th1 > TWO_PI || this.th1 < -TWO_PI) {
-      const n = Math.trunc(this.th1 / TWO_PI) * TWO_PI;
-      this.th1 -= n;
-      this.beta -= n;
+      this.th1 -= Math.trunc(this.th1 / TWO_PI) * TWO_PI;
     }
     this.dirty = true;
+  }
+
+  /// Half a tooth pitch: the offset that puts the mate's gaps opposite these
+  /// teeth. Follows the tooth count as soon as a new gear is loaded.
+  meshOffset() {
+    return this.teeth > 0 ? Math.PI / this.teeth : 0;
+  }
+  /// Where the follower actually is. Derived rather than stored, so it is the
+  /// meshed position from the very first frame and stays correct when the
+  /// tooth count changes under it.
+  followerAngle() {
+    return this.th1 + this.meshOffset() + this.lashPos;
   }
 
   /// Camera axes. Only the azimuth and elevation matter, so this is safe to
@@ -513,7 +518,7 @@ class View {
       // makes it counter-rotate on its own and, for a helical gear, gives it
       // the opposite hand - which is what a parallel axis pair needs.
       const m = M4.mul(M4.trans(this.pairDist, 0, 0),
-        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.beta)));
+        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.followerAngle())));
       drawOne(m, brass, true);
     }
     gl.frontFace(gl.CCW);
