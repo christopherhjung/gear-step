@@ -131,9 +131,16 @@ A few extras that only make sense interactively:
 
 The display mesh is a separate, purely triangular tessellation
 (`src/mesh.rs`, with an ear clipping triangulator in `src/earcut.rs`); the
-exported solid stays analytic. `cargo test` checks that the mesh is a closed
-manifold whose volume matches the analytic cross-section for a spread of
-parameter sets.
+exported solid stays analytic. Its normals are analytic too - radial on the
+cylinders, exact on the planes, and on the spline flanks the tangent of the
+parabola through each point and its neighbours; for a helical gear the axial
+component falls out of the swept surface in closed form.
+
+`cargo test` checks, over a spread of parameter sets, that the mesh is a closed
+manifold, that its volume matches the analytic cross-section, that no normal
+points into the solid, and - using the fact that the normal of an involute is
+tangent to the base circle, so `|P x n| == r_b` - that the flank normals sit
+within about 0.03 deg of the exact involute.
 
 ## Not implemented
 

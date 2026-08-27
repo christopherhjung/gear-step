@@ -130,7 +130,6 @@ precision highp float;
 in vec3 vN; in vec3 vP;
 uniform vec3 uEye;
 uniform vec3 uBase;
-uniform float uFlip;
 out vec4 frag;
 
 vec3 aces(vec3 x){
@@ -138,7 +137,7 @@ vec3 aces(vec3 x){
 }
 
 void main(){
-  vec3 N = normalize(vN) * uFlip;
+  vec3 N = normalize(vN);
   if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(uEye - vP);
 
@@ -190,7 +189,6 @@ class View {
       nrm: gl.getUniformLocation(this.prog, 'uNrmMat'),
       eye: gl.getUniformLocation(this.prog, 'uEye'),
       base: gl.getUniformLocation(this.prog, 'uBase'),
-      flip: gl.getUniformLocation(this.prog, 'uFlip'),
     };
     this.lu = {
       mvp: gl.getUniformLocation(this.lprog, 'uMVP'),
@@ -354,8 +352,8 @@ class View {
     const view = M4.lookAt(eye, this.target, [0, 0, 1]);
     const vp = M4.mul(proj, view);
 
-    const drawOne = (model, flip, base, cw) => {
-      gl.frontFace(cw ? gl.CW : gl.CCW);
+    const drawOne = (model, base, mirrored) => {
+      gl.frontFace(mirrored ? gl.CW : gl.CCW);
       const mvp = M4.mul(vp, model);
       gl.useProgram(this.prog);
       gl.uniformMatrix4fv(this.u.mvp, false, mvp);
@@ -366,7 +364,6 @@ class View {
         model[8], model[9], model[10]]));
       gl.uniform3fv(this.u.eye, new Float32Array(eye));
       gl.uniform3fv(this.u.base, new Float32Array(base));
-      gl.uniform1f(this.u.flip, flip);
       gl.bindVertexArray(this.vao);
       // push the filled faces a hair away from the eye so the edges that lie
       // exactly on them win, without lifting the ones behind them
@@ -389,7 +386,7 @@ class View {
 
     const steel = [0.30, 0.335, 0.395];
     const brass = [0.50, 0.345, 0.13];
-    drawOne(M4.rotZ(this.spin), 1, steel, false);
+    drawOne(M4.rotZ(this.spin), steel, false);
     if (this.opts.pair && this.pairDist > 0 && this.teeth > 0) {
       // The mate is this gear mirrored about the plane x = a/2, turned by half
       // a pitch so its teeth land in these gaps instead of on them. The mirror
@@ -397,7 +394,7 @@ class View {
       // the opposite hand - which is what a parallel axis pair needs.
       const m = M4.mul(M4.trans(this.pairDist, 0, 0),
         M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.spin + Math.PI / this.teeth)));
-      drawOne(m, -1, brass, true);
+      drawOne(m, brass, true);
     }
     gl.frontFace(gl.CCW);
   }

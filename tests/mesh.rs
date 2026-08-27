@@ -54,6 +54,90 @@ fn check(mesh: &gear_step::mesh::Mesh) -> (Result<String, String>, f64) {
     (res, vol)
 }
 
+/// Every stored vertex normal has to agree with the faces that use it. The
+/// triangles are wound outward (the volume check proves it), so a vertex normal
+/// that disagrees with its own faces is simply wrong.
+fn normal_check(mesh: &gear_step::mesh::Mesh) -> (f64, usize, usize) {
+    let pos = |i: u32| {
+        let i = i as usize * 3;
+        [mesh.pos[i] as f64, mesh.pos[i + 1] as f64, mesh.pos[i + 2] as f64]
+    };
+    let nrm = |i: u32| {
+        let i = i as usize * 3;
+        [mesh.nrm[i] as f64, mesh.nrm[i + 1] as f64, mesh.nrm[i + 2] as f64]
+    };
+    let mut worst: f64 = 1.0;
+    let mut bad = 0;
+    let mut flipped = 0;
+    for t in mesh.idx.chunks(3) {
+        let (a, b, c) = (pos(t[0]), pos(t[1]), pos(t[2]));
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let mut f = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let l = (f[0] * f[0] + f[1] * f[1] + f[2] * f[2]).sqrt();
+        if l < 1e-14 {
+            continue;
+        }
+        for k in 0..3 {
+            f[k] /= l;
+        }
+        for &i in t {
+            let n = nrm(i);
+            let d = n[0] * f[0] + n[1] * f[1] + n[2] * f[2];
+            worst = worst.min(d);
+            if d < 0.9 {
+                bad += 1;
+            }
+            if d < 0.0 {
+                flipped += 1;
+            }
+        }
+    }
+    (worst, bad, flipped)
+}
+
+/// The normal of an involute is tangent to the base circle: for a point P on
+/// the flank with unit normal n, |P x n| == r_b exactly. That is an absolute
+/// check on the mesh normals, independent of how finely the flank is chopped.
+/// Returns the worst error in mm and the angle it corresponds to, in degrees.
+fn involute_normal_error(b: &gear_step::api::Built, mesh: &gear_step::mesh::Mesh) -> (f64, f64) {
+    let (r_b, r_form, r_a) = (b.g.r_b, b.g.r_form, b.g.r_a);
+    let mut worst = 0.0f64;
+    let mut worst_deg = 0.0f64;
+    for i in 0..mesh.pos.len() / 3 {
+        let (x, y, z) = (
+            mesh.pos[i * 3] as f64,
+            mesh.pos[i * 3 + 1] as f64,
+            mesh.pos[i * 3 + 2] as f64,
+        );
+        if z.abs() > 1e-9 {
+            continue; // the bottom layer only: there the section is unrotated
+        }
+        let (nx, ny) = (mesh.nrm[i * 3] as f64, mesh.nrm[i * 3 + 1] as f64);
+        let l = nx.hypot(ny);
+        if l < 0.5 {
+            continue; // an end cap vertex, normal along the axis
+        }
+        let r = x.hypot(y);
+        // strictly between the form and the tip circle is the involute flank,
+        // clear of the root fillet, the root cylinder and the tip land
+        if r <= r_form * 1.002 || r >= r_a * 0.998 {
+            continue;
+        }
+        let arm = (x * ny / l - y * nx / l).abs();
+        let e = (arm - r_b).abs();
+        if e > worst {
+            worst = e;
+            worst_deg = (e / (r * r - r_b * r_b).max(1e-12).sqrt()).atan().to_degrees();
+        }
+    }
+    (worst, worst_deg)
+}
+
 /// Cross-section area from the sampled contours (shoelace), outer minus holes.
 fn section_area(b: &gear_step::api::Built) -> f64 {
     let shoelace = |c: &Vec<[f64; 2]>| {
@@ -75,20 +159,38 @@ fn case(name: &str, spec: Spec) {
     let (res, vol) = check(&mesh);
     let want = section_area(&b) * b.spec.width;
     let err = (vol - want).abs() / want;
+    let (worst, bad, flipped) = normal_check(&mesh);
+    let (inv_e, inv_deg) = involute_normal_error(&b, &mesh);
     println!(
-        "{:<26} {:>7} tris  volume {:>12.4} vs {:>12.4} mm3  ({:.2e})  {}",
+        "{:<24} {:>7} tris  vol {:.0e}  dot {:.4} ({} off, {} flipped)  flank normal {:>7.4} deg  {}",
         name,
         mesh.idx.len() / 3,
-        vol,
-        want,
         err,
+        worst,
+        bad,
+        flipped,
+        inv_deg,
         match &res {
-            Ok(s) => s.clone(),
-            Err(e) => e.clone(),
+            Ok(_) => "closed",
+            Err(_) => "OPEN",
         }
     );
+    let _ = inv_e;
     res.unwrap_or_else(|e| panic!("{}: {}", name, e));
     assert!(err < 2e-3, "{}: volume off by {:.3}%", name, err * 100.0);
+    assert_eq!(flipped, 0, "{}: {} vertex normals point into the solid", name, flipped);
+    assert!(
+        worst > 0.9,
+        "{}: a vertex normal is {:.1} deg off the face that uses it",
+        name,
+        worst.acos().to_degrees()
+    );
+    assert!(
+        inv_deg < 0.5,
+        "{}: a flank normal misses the exact involute by {:.3} deg",
+        name,
+        inv_deg
+    );
 }
 
 #[test]

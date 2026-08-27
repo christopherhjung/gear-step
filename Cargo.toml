@@ -17,5 +17,6 @@ path = "src/main.rs"
 [profile.release]
 opt-level = 3
 lto = true
-panic = "abort"
 codegen-units = 1
+# no panic = "abort" here: it would infect the test profile, and wasm aborts on
+# panic regardless of what we ask for.

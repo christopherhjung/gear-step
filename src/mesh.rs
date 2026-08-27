@@ -39,6 +39,54 @@ fn rot(p: [f64; 2], a: f64) -> [f64; 2] {
     [c * p[0] - s * p[1], s * p[0] + c * p[1]]
 }
 
+/// Tangent of a polyline at index `i`, from the parabola through that point
+/// and its two neighbours. Exact for a quadratic even when the points are not
+/// evenly spaced, which matters at the ends of a spline flank: the plain
+/// difference to the next point there is the chord, not the tangent, and it
+/// leaves a visible shading seam where the fillet meets the involute.
+fn tangent_at(p: &[[f64; 2]], i: usize) -> [f64; 2] {
+    let n = p.len();
+    let chord = |a: [f64; 2], b: [f64; 2]| [b[0] - a[0], b[1] - a[1]];
+    if n < 3 {
+        return chord(p[0], p[n - 1]);
+    }
+    // the three points the parabola runs through, and where `i` sits among them
+    let (i0, k) = if i == 0 {
+        (0, 0)
+    } else if i == n - 1 {
+        (n - 3, 2)
+    } else {
+        (i - 1, 1)
+    };
+    let q = [p[i0], p[i0 + 1], p[i0 + 2]];
+    let h1 = (q[1][0] - q[0][0]).hypot(q[1][1] - q[0][1]);
+    let h2 = (q[2][0] - q[1][0]).hypot(q[2][1] - q[1][1]);
+    if h1 < 1e-12 || h2 < 1e-12 {
+        return chord(p[i.saturating_sub(1)], p[(i + 1).min(n - 1)]);
+    }
+    let (a, b, c) = match k {
+        0 => (
+            -(2.0 * h1 + h2) / (h1 * (h1 + h2)),
+            (h1 + h2) / (h1 * h2),
+            -h1 / (h2 * (h1 + h2)),
+        ),
+        1 => (
+            -h2 / (h1 * (h1 + h2)),
+            (h2 - h1) / (h1 * h2),
+            h1 / (h2 * (h1 + h2)),
+        ),
+        _ => (
+            h2 / (h1 * (h1 + h2)),
+            -(h1 + h2) / (h1 * h2),
+            (h1 + 2.0 * h2) / (h2 * (h1 + h2)),
+        ),
+    };
+    [
+        a * q[0][0] + b * q[1][0] + c * q[2][0],
+        a * q[0][1] + b * q[1][1] + c * q[2][1],
+    ]
+}
+
 /// Sample one segment as (point, outward normal) pairs, both ends included.
 fn sample_seg(s: &Seg, sign: f64) -> Vec<([f64; 2], [f64; 2])> {
     let nrm = |t: [f64; 2]| [sign * t[1], -sign * t[0]];
@@ -58,21 +106,9 @@ fn sample_seg(s: &Seg, sign: f64) -> Vec<([f64; 2], [f64; 2])> {
                 })
                 .collect()
         }
-        Seg::Curve(p) => {
-            let n = p.len();
-            (0..n)
-                .map(|i| {
-                    let (a, b) = if i == 0 {
-                        (p[0], p[1])
-                    } else if i == n - 1 {
-                        (p[n - 2], p[n - 1])
-                    } else {
-                        (p[i - 1], p[i + 1])
-                    };
-                    (p[i], nrm(unit([b[0] - a[0], b[1] - a[1]])))
-                })
-                .collect()
-        }
+        Seg::Curve(p) => (0..p.len())
+            .map(|i| (p[i], nrm(unit(tangent_at(p, i)))))
+            .collect(),
     }
 }
 
