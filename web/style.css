@@ -50,7 +50,7 @@ header.brand {
   background: var(--panel);
   z-index: 3;
 }
-header.brand h1 {
+header.brand h1, header.brand h2 {
   margin: 0;
   font-size: 15px;
   letter-spacing: .02em;

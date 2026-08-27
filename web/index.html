@@ -4,9 +4,72 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gear-step - involute gear lab</title>
+<meta name="google-site-verification" content="hdi57xvLluRPFq_SmbIA3MDVmEKIIJ5EZRDhOiFWQ2w" />
+<meta name="description" content="Involute spur and helical gear generator that runs in the browser: true trochoidal root fillets, live 3D preview, STEP AP214, STL and SVG export.">
+<link rel="canonical" href="https://christopherhjung.github.io/gear-step/">
+<meta name="theme-color" content="#0e1116">
+<meta name="color-scheme" content="dark">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="gear-step">
+<meta property="og:title" content="gear-step - involute gear lab">
+<meta property="og:description" content="Involute spur and helical gear generator that runs in the browser: true trochoidal root fillets, live 3D preview, STEP AP214, STL and SVG export.">
+<meta property="og:url" content="https://christopherhjung.github.io/gear-step/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="gear-step - involute gear lab">
+<meta name="twitter:description" content="Involute spur and helical gear generator that runs in the browser: true trochoidal root fillets, live 3D preview, STEP AP214, STL and SVG export.">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "gear-step",
+  "alternateName": "gear-step involute gear lab",
+  "description": "Involute spur and helical gear generator that runs in the browser: true trochoidal root fillets, live 3D preview, STEP AP214, STL and SVG export.",
+  "url": "https://christopherhjung.github.io/gear-step/",
+  "applicationCategory": "DesignApplication",
+  "applicationSubCategory": "CAD",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires WebAssembly and WebGL2",
+  "softwareVersion": "0.1.0",
+  "codeRepository": "https://github.com/christopherhjung/gear-step",
+  "programmingLanguage": [
+    "Rust",
+    "WebAssembly",
+    "JavaScript"
+  ],
+  "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "christopherhjung",
+    "url": "https://github.com/christopherhjung"
+  },
+  "featureList": [
+    "External spur and helical involute gears",
+    "True trochoidal root fillet, cut the way a hob would",
+    "Profile shift, backlash allowance and custom basic rack",
+    "Bores with DIN 6885-1 keyways, D flats and lightening holes",
+    "STEP AP214 solid with analytic surfaces, plus STL and SVG",
+    "Meshing pair simulation with backlash"
+  ]
+}
+</script>
+
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<noscript>
+  <p style="padding:16px">gear-step is an involute gear generator that runs
+  entirely in your browser, so it needs JavaScript and WebAssembly. The command
+  line version is at
+  <a href="https://github.com/christopherhjung/gear-step">github.com/christopherhjung/gear-step</a>.</p>
+</noscript>
 <div id="app">
 
   <!-- ------------------------------------------------ settings -->
@@ -273,7 +336,7 @@
   <!-- ------------------------------------------------ data sheet -->
   <aside class="panel" id="sheet">
     <header class="brand">
-      <h1>data sheet</h1>
+      <h2>data sheet</h2>
       <p class="sheet-name" id="sheetName">-</p>
     </header>
     <div class="dl">
