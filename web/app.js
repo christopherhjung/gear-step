@@ -112,6 +112,26 @@ const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / 
 
 const FOV = 0.72;   // vertical field of view, radians
 const DEFAULT_RPM = 6;   // spin speed the slider starts at
+const RPM_MAX = 60;      // rev/min at either end of the slider
+// Curvature of the speed slider. The slider carries a position in [-1, 1] and
+// the speed grows exponentially along it, so the slow speeds worth watching a
+// mesh at get most of the travel while the top end still reaches RPM_MAX. One
+// would be a straight line; 60 gives about 0.04 rpm per step near the middle
+// and 2.5 rpm per step at the ends.
+const RPM_TAPER = 60;
+
+function sliderToRpm(t) {
+  return Math.sign(t) * RPM_MAX
+    * (Math.pow(RPM_TAPER, Math.abs(t)) - 1) / (RPM_TAPER - 1);
+}
+function rpmToSlider(rpm) {
+  return Math.sign(rpm)
+    * Math.log(1 + (Math.abs(rpm) / RPM_MAX) * (RPM_TAPER - 1)) / Math.log(RPM_TAPER);
+}
+/// Slow speeds are the point of the taper, so show them to a decimal.
+function fmtRpm(r) {
+  return Math.abs(r) < 10 ? r.toFixed(1) : r.toFixed(0);
+}
 
 // Bearing friction on a gear that nothing is driving. Two parts, because one
 // is not enough: a viscous term that scales with speed, and a dry (Coulomb)
@@ -1032,12 +1052,14 @@ function toggleChip(id, key, after) {
 /// on its own.
 function wireSpin() {
   const slider = $('spinRate'), out = $('spinRpm'), chip = $('tSpin');
+  const rpmNow = () => sliderToRpm(Number(slider.value) / 100);
+  const seek = (rpm) => { slider.value = Math.round(rpmToSlider(rpm) * 100); };
   const show = (rpm) => {
-    out.textContent = `${rpm} rpm`;
+    out.textContent = `${fmtRpm(rpm)} rpm`;
     view.cmd = rpm * Math.PI / 30;
   };
   slider.addEventListener('input', () => {
-    const rpm = Number(slider.value);
+    const rpm = rpmNow();
     show(rpm);
     const on = rpm !== 0;
     view.opts.spin = on;
@@ -1046,12 +1068,13 @@ function wireSpin() {
   });
   toggleChip('tSpin', 'spin', (on) => {
     // starting from a stopped slider would look broken, so give it a nudge
-    if (on && Number(slider.value) === 0) {
-      slider.value = DEFAULT_RPM;
-      show(DEFAULT_RPM);
+    if (on && rpmNow() === 0) {
+      seek(DEFAULT_RPM);
+      show(rpmNow());
     }
   });
-  show(Number(slider.value));
+  seek(DEFAULT_RPM);
+  show(rpmNow());
 }
 
 async function main() {
