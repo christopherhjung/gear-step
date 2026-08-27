@@ -138,9 +138,21 @@ A few extras that only make sense interactively:
   rescue is an undercut flank - once the involute has been cut away the
   profiles are not conjugate at any distance, and the data sheet says so. It counter-rotates on its own, and for a helical gear it
   comes out the opposite hand, which is what a parallel axis pair needs.
+* **turn by hand** - grab a gear with the pointer and turn it. The pointer ray
+  is dropped onto the plane the gears run in, so the gear follows the angle
+  under the cursor rather than some pixel offset, and whichever gear you
+  grabbed becomes the input: turn the mate and the driver is the one that gets
+  pushed, backlash and all. Let go and it keeps the speed it had, then friction
+  takes it down - or the motor picks it up again, if the drive is on. While the
+  mode is on, plain dragging turns instead of orbiting; wheel and shift-drag
+  are unchanged.
 * **spin** - runs the pair as a driveline rather than stepping a fixed angle.
   The slider commands the driver's speed in rev/min; it eases up to that
-  instead of jumping to it, and switching the drive off lets both coast down.
+  instead of jumping to it. Anything nothing is driving is slowed by bearing
+  friction, a viscous part that scales with speed plus a dry part that does
+  not, so a free gear comes to a real stop instead of creeping towards one for
+  ever. A motor holding a command works through it, so the commanded speed is
+  the speed you get.
   The follower is a body of its own with its own momentum, tied to the driver
   only through the flanks: inside the backlash allowance it freewheels, so
   reversing shows the lash being taken up before the far flank picks it up

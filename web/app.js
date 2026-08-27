@@ -113,6 +113,21 @@ const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / 
 const FOV = 0.72;   // vertical field of view, radians
 const DEFAULT_RPM = 6;   // spin speed the slider starts at
 
+// Bearing friction on a gear that nothing is driving. Two parts, because one
+// is not enough: a viscous term that scales with speed, and a dry (Coulomb)
+// term that does not. Viscous decay alone only ever approaches zero, so a gear
+// would creep for ever; the dry term is what actually brings it to rest, and
+// it is clamped so a step can never push the speed past zero and start it
+// running backwards.
+const TAU_VISCOUS = 2.5;   // e-folding time of the speed dependent part, s
+const COULOMB = 0.35;      // speed the dry part removes per second, rad/s^2
+
+function bearingFriction(w, dt) {
+  const v = w * Math.exp(-dt / TAU_VISCOUS);
+  const dry = COULOMB * dt;
+  return Math.abs(v) <= dry ? 0 : v - Math.sign(v) * dry;
+}
+
 // Three point rig, given in camera space: +x right, +y up, +z out of the
 // screen towards the viewer. It rides with the eye, so the model is lit the
 // same way from every angle instead of going flat when you orbit behind it.
@@ -234,7 +249,8 @@ class View {
     this.w2 = 0;         // follower speed, rad/s
     this.lashHalf = 0;   // half the angular play, rad
     this.cmd = DEFAULT_RPM * Math.PI / 30;   // commanded speed, sign = sense
-    this.opts = { edges: true, spin: false, pair: false };
+    this.turning = null; // live hand turn: which gear, and how far it moved
+    this.opts = { edges: true, spin: false, pair: false, drag: false };
     this.pairDist = 0;
     this.dirty = true;
     this.hookInput();
@@ -306,11 +322,21 @@ class View {
     const cv = this.cv;
     let drag = null;
     cv.addEventListener('pointerdown', (e) => {
-      drag = { x: e.clientX, y: e.clientY, pan: e.shiftKey || e.button === 1 || e.button === 2 };
+      const pan = e.shiftKey || e.button === 1 || e.button === 2;
+      if (this.opts.drag && !pan) {
+        this.grab(e.clientX, e.clientY);       // turn the gear, do not orbit
+        document.body.classList.add('grabbing');
+      } else {
+        drag = { x: e.clientX, y: e.clientY, pan };
+      }
       cv.setPointerCapture(e.pointerId);
     });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('pointermove', (e) => {
+      if (this.turning) {
+        this.turn(e.clientX, e.clientY);
+        return;
+      }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       drag.x = e.clientX; drag.y = e.clientY;
@@ -325,7 +351,13 @@ class View {
       }
       this.dirty = true;
     });
-    const stop = (e) => { if (drag) { drag = null; cv.releasePointerCapture?.(e.pointerId); } };
+    const stop = (e) => {
+      // let go with whatever speed it had, so a flick coasts on
+      this.turning = null;
+      document.body.classList.remove('grabbing');
+      if (drag) drag = null;
+      cv.releasePointerCapture?.(e.pointerId);
+    };
     cv.addEventListener('pointerup', stop);
     cv.addEventListener('pointercancel', stop);
     cv.addEventListener('wheel', (e) => {
@@ -366,31 +398,64 @@ class View {
   /// and switching the drive off lets both coast down instead of freezing.
   stepDrive(dt) {
     const TAU_DRIVE = 0.28;   // how briskly the driver reaches the command, s
-    const TAU_COAST = 1.6;    // how long the follower freewheels for, s
     const BOUNCE = 0.12;      // restitution when a flank is struck
     const IMPACT = 0.05;      // rad/s below which contact is a rest, not a hit
-    const cmd = this.opts.spin ? this.cmd : 0;
+
+    const g = this.turning;
+    const da = g ? g.delta : 0;
+    if (g) g.delta = 0;
+    const cmd = this.opts.spin && !g ? this.cmd : 0;
     const moving = Math.abs(this.w1) > 1e-4 || Math.abs(this.w2) > 1e-4;
-    if (!moving && cmd === 0) return;
+    if (!g && !moving && cmd === 0) return;
 
-    this.w1 += (cmd - this.w1) * (1 - Math.exp(-dt / TAU_DRIVE));
-    this.th1 += this.w1 * dt;
-
+    const half = this.meshOffset();
     const L = this.lashHalf;
-    if (L <= 1e-9) {
-      this.w2 = this.w1;                         // no allowance: rigid pair
-      this.lashPos = 0;
+    const rate = dt > 1e-6 ? da / dt : 0;
+
+    if (g && g.which === 2) {
+      // The mate is being turned by hand, so it is the input and the driver is
+      // the one that gets pushed - the mirror image of the usual case, lash and
+      // all, so you feel the play from either side.
+      const dbeta = -da;
+      const betaNew = this.th1 + half + this.lashPos + dbeta;
+      // smoothed, so a frame without a pointer move does not kill the throw
+      this.w2 = this.w2 * 0.5 + (dt > 1e-6 ? dbeta / dt : 0) * 0.5;
+      this.w1 = bearingFriction(this.w1, dt);
+      this.th1 += this.w1 * dt;
+      let u = betaNew - this.th1 - half;
+      if (L <= 1e-9 || u > L || u < -L) {
+        u = Math.max(-L, Math.min(L, u));
+        this.th1 = betaNew - half - u;      // contact carries the driver along
+        this.w1 = this.w2;
+      }
+      this.lashPos = u;
     } else {
-      this.w2 *= Math.exp(-dt / TAU_COAST);      // freewheeling
-      this.lashPos += (this.w2 - this.w1) * dt;        // drift inside the band
-      if (this.lashPos > L || this.lashPos < -L) {
-        this.lashPos = this.lashPos > L ? L : -L;
-        const rel = this.w2 - this.w1;
-        // Only a real approach speed counts as a hit and bounces. Drag alone
-        // pressing the follower onto a flank it is already touching is resting
-        // contact: it just gets carried, or the pair would buzz for ever.
-        const hit = (this.lashPos > 0 ? rel > 0 : rel < 0) && Math.abs(rel) > IMPACT;
-        this.w2 = hit ? this.w1 - BOUNCE * rel : this.w1;
+      if (g) {
+        this.th1 += da;                     // the hand is the input
+        this.w1 = this.w1 * 0.5 + rate * 0.5;
+      } else if (this.opts.spin) {
+        // driven: the motor works against the friction and holds the command
+        this.w1 += (cmd - this.w1) * (1 - Math.exp(-dt / TAU_DRIVE));
+        this.th1 += this.w1 * dt;
+      } else {
+        this.w1 = bearingFriction(this.w1, dt);   // nothing driving it
+        this.th1 += this.w1 * dt;
+      }
+      if (L <= 1e-9) {
+        this.w2 = this.w1;                  // no allowance: rigid pair
+        this.lashPos = 0;
+      } else {
+        this.w2 = bearingFriction(this.w2, dt);    // freewheeling
+        this.lashPos += (this.w2 - this.w1) * dt;  // drift inside the band
+        if (this.lashPos > L || this.lashPos < -L) {
+          this.lashPos = this.lashPos > L ? L : -L;
+          const rel = this.w2 - this.w1;
+          // Only a real approach speed counts as a hit and bounces. Drag alone
+          // pressing the follower onto a flank it is already touching is
+          // resting contact: it just gets carried, or the pair would buzz.
+          const hit = (this.lashPos > 0 ? rel > 0 : rel < 0) && Math.abs(rel) > IMPACT;
+          this.w2 = hit ? this.w1 - BOUNCE * rel : this.w1;
+        }
       }
     }
 
@@ -398,6 +463,60 @@ class View {
     const TWO_PI = Math.PI * 2;
     if (this.th1 > TWO_PI || this.th1 < -TWO_PI) {
       this.th1 -= Math.trunc(this.th1 / TWO_PI) * TWO_PI;
+    }
+    this.dirty = true;
+  }
+
+  /// Where the pointer lands on the plane the gears turn in. Null when the
+  /// eye is so close to edge on that the ray never meets it.
+  pickPoint(clientX, clientY) {
+    const r = this.cv.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    const nx = ((clientX - r.left) / r.width) * 2 - 1;
+    const ny = 1 - ((clientY - r.top) / r.height) * 2;
+    const t = Math.tan(FOV / 2), asp = r.width / r.height;
+    const { fwd, right, up } = this.basis();
+    const eye = this.eye();
+    const d = [0, 1, 2].map((i) => fwd[i] + right[i] * nx * t * asp + up[i] * ny * t);
+    if (Math.abs(d[2]) < 1e-4) return null;
+    const k = (this.centre[2] - eye[2]) / d[2];
+    if (k <= 0) return null;
+    return [eye[0] + d[0] * k, eye[1] + d[1] * k];
+  }
+
+  /// Start a hand turn on whichever gear the pointer is over.
+  grab(clientX, clientY) {
+    const p = this.pickPoint(clientX, clientY);
+    const pair = this.opts.pair && this.pairDist > 0;
+    if (!p) {
+      // edge on: fall back to plain sideways dragging
+      this.turning = { which: 1, screen: clientX, delta: 0 };
+      return;
+    }
+    const d1 = Math.hypot(p[0], p[1]);
+    const d2 = pair ? Math.hypot(p[0] - this.pairDist, p[1]) : Infinity;
+    const which = d2 < d1 ? 2 : 1;
+    const cx = which === 2 ? this.pairDist : 0;
+    this.turning = { which, last: Math.atan2(p[1], p[0] - cx), delta: 0 };
+  }
+
+  /// Feed pointer motion into the turn as an angle about that gear's axis.
+  turn(clientX, clientY) {
+    const g = this.turning;
+    if (!g) return;
+    if (g.screen !== undefined) {
+      g.delta += (clientX - g.screen) * 0.008;
+      g.screen = clientX;
+    } else {
+      const p = this.pickPoint(clientX, clientY);
+      if (!p) return;
+      const cx = g.which === 2 ? this.pairDist : 0;
+      const a = Math.atan2(p[1], p[0] - cx);
+      let da = a - g.last;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      g.last = a;
+      g.delta += da;
     }
     this.dirty = true;
   }
@@ -962,16 +1081,30 @@ async function main() {
 
   buildPresets();
   toggleChip('tEdges', 'edges');
+  toggleChip('tDrag', 'drag', (on) => {
+    document.body.classList.toggle('mode-drag', on);
+    if (!on) { view.turning = null; document.body.classList.remove('grabbing'); }
+    setHint();
+  });
   wireSpin();
   toggleChip('tPair', 'pair');
   $('tFit').addEventListener('click', () => {
     if (document.body.classList.contains('mode-2d')) profile.reset(); else view.fit();
   });
+  const setHint = () => {
+    if (document.body.classList.contains('mode-2d')) {
+      $('hint').textContent = 'drag pan · wheel zoom';
+    } else if (view && view.opts.drag) {
+      $('hint').textContent = 'drag a gear to turn it · wheel zoom · shift-drag pan';
+    } else {
+      $('hint').textContent = 'drag orbit · wheel zoom · shift-drag pan';
+    }
+  };
   const tabs = (three) => {
     document.body.classList.toggle('mode-2d', !three);
     $('tab3d').setAttribute('aria-pressed', String(three));
     $('tab2d').setAttribute('aria-pressed', String(!three));
-    $('hint').textContent = three ? 'drag orbit · wheel zoom · shift-drag pan' : 'drag pan · wheel zoom';
+    setHint();
     if (view) view.dirty = true;
     profile.dirty = true;
   };
