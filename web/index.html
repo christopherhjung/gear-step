@@ -249,13 +249,21 @@
       <button class="chip" id="tab3d" aria-pressed="true">3D</button>
       <button class="chip" id="tab2d" aria-pressed="false">profile</button>
       <button class="chip" id="tEdges" aria-pressed="true">edges</button>
+      <button class="chip" id="tPair" aria-pressed="false">mesh pair</button>
+      <button class="chip" id="tDrag" aria-pressed="false">turn by hand</button>
       <button class="chip" id="tSpin" aria-pressed="false">spin</button>
       <input type="range" class="chip-range" id="spinRate" min="-60" max="60"
              step="1" value="6" aria-label="spin speed in rev/min">
       <span class="chip readout" id="spinRpm">6 rpm</span>
-      <button class="chip" id="tPair" aria-pressed="false">mesh pair</button>
-      <button class="chip" id="tDrag" aria-pressed="false">turn by hand</button>
-      <button class="chip" id="tFit">fit</button>
+    </div>
+    <div id="hudRight">
+      <button class="chip icon" id="tFit" title="fit the view" aria-label="fit the view">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10"
+                fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
     <div id="stats"></div>
     <div id="hint">drag orbit &middot; wheel zoom &middot; shift-drag pan</div>

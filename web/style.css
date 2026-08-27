@@ -151,6 +151,19 @@ body.mode-2d #profile { display: block; }
   pointer-events: none;
 }
 #hud > * { pointer-events: auto; }
+
+/* view actions, kept out of the toggle group in the opposite corner */
+#hudRight {
+  position: absolute; right: 14px; top: 12px;
+  display: flex; gap: 6px; align-items: center;
+}
+body.mode-2d #hudRight { display: flex; }
+
+.chip.icon {
+  padding: 0; width: 28px; height: 28px;
+  display: grid; place-items: center;
+}
+.chip.icon svg { width: 15px; height: 15px; display: block; }
 .chip {
   background: #131924cc; border: 1px solid var(--line); color: var(--dim);
   border-radius: 999px; padding: 4px 11px; font: 11px var(--mono); cursor: pointer;
