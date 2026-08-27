@@ -147,8 +147,10 @@ A few extras that only make sense interactively:
   mode is on, plain dragging turns instead of orbiting; wheel and shift-drag
   are unchanged.
 * **spin** - runs the pair as a driveline rather than stepping a fixed angle.
-  The slider commands the driver's speed in rev/min; it eases up to that
-  instead of jumping to it. Anything nothing is driving is slowed by bearing
+  The slider commands the driver's speed, up to 60 rev/min either way, on an
+  exponential taper: the slow speeds worth watching a mesh at get most of the
+  travel, about 0.04 rpm per step near the middle against 2.5 rpm at the ends.
+  The driver eases up to the command instead of jumping to it. Anything nothing is driving is slowed by bearing
   friction, a viscous part that scales with speed plus a dry part that does
   not, so a free gear comes to a real stop instead of creeping towards one for
   ever. A motor holding a command works through it, so the commanded speed is
