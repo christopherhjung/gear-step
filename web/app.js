@@ -322,15 +322,45 @@ class View {
     cv.addEventListener('pointercancel', stop);
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.dist *= Math.exp(e.deltaY * 0.0012);
-      this.dist = Math.max(this.radius * 0.35, Math.min(this.radius * 60, this.dist));
+      const d0 = this.dist;
+      const d1 = Math.max(this.radius * 0.35,
+        Math.min(this.radius * 60, d0 * Math.exp(e.deltaY * 0.0012)));
+      const k = d1 / d0;
+      this.dist = d1;
+      if (k !== 1) {
+        // Keep whatever sits under the pointer under the pointer. Take the
+        // point on the plane through the target that projects there; moving
+        // the target to F + (target - F) * k leaves it exactly fixed on
+        // screen, because the eye to point vector just scales by k.
+        const r = cv.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
+          const ny = 1 - ((e.clientY - r.top) / r.height) * 2;
+          const hh = d0 * Math.tan(FOV / 2);
+          const { right, up } = this.basis();
+          const f = 1 - k;
+          for (let i = 0; i < 3; i++) {
+            this.target[i] +=
+              (right[i] * nx * hh * (r.width / r.height) + up[i] * ny * hh) * f;
+          }
+        }
+      }
       this.dirty = true;
     }, { passive: false });
   }
-  upVec() {
-    const f = norm(sub(this.eye(), this.target));
+  /// Camera axes. Only the azimuth and elevation matter, so this is safe to
+  /// call before moving the target.
+  basis() {
+    const fwd = [
+      -Math.cos(this.el) * Math.cos(this.az),
+      -Math.cos(this.el) * Math.sin(this.az),
+      -Math.sin(this.el),
+    ];
     const right = [Math.cos(this.az + Math.PI / 2), Math.sin(this.az + Math.PI / 2), 0];
-    return cross(f, right);
+    return { fwd, right, up: cross(right, fwd) };
+  }
+  upVec() {
+    return this.basis().up;
   }
   eye() {
     const ce = Math.cos(this.el);
@@ -373,9 +403,7 @@ class View {
     const vp = M4.mul(proj, view);
 
     // camera basis: `right` straight from the azimuth, so it never degenerates
-    const fwd = norm(sub(this.target, eye));
-    const right = [Math.cos(this.az + Math.PI / 2), Math.sin(this.az + Math.PI / 2), 0];
-    const up = cross(right, fwd);
+    const { fwd, right, up } = this.basis();
     const toWorld = (l) => norm([
       l[0] * right[0] + l[1] * up[0] - l[2] * fwd[0],
       l[0] * right[1] + l[1] * up[1] - l[2] * fwd[1],
@@ -451,8 +479,18 @@ class Profile {
     cv.addEventListener('pointerup', () => { drag = null; });
     cv.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.zoom *= Math.exp(-e.deltaY * 0.0012);
-      this.zoom = Math.max(0.15, Math.min(60, this.zoom));
+      const z0 = this.zoom;
+      this.zoom = Math.max(0.15, Math.min(60, z0 * Math.exp(-e.deltaY * 0.0012)));
+      const k = this.zoom / z0;
+      // hold the point under the pointer still: the pan offset is measured
+      // from the canvas centre, so it scales about the pointer the same way
+      const r = cv.getBoundingClientRect();
+      if (k !== 1 && r.width > 0) {
+        const px = e.clientX - r.left - r.width / 2;
+        const py = e.clientY - r.top - r.height / 2;
+        this.ox = px - (px - this.ox) * k;
+        this.oy = py - (py - this.oy) * k;
+      }
       this.dirty = true;
     }, { passive: false });
   }
