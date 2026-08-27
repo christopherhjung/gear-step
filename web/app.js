@@ -167,7 +167,6 @@ layout(location=0) in vec3 aPos;
 uniform mat4 uMVP;
 void main(){
   gl_Position = uMVP * vec4(aPos,1.0);
-  gl_Position.z -= 0.00035 * gl_Position.w;   // pull the edges forward
 }`;
 const LFS = `#version 300 es
 precision highp float;
@@ -209,6 +208,7 @@ class View {
     // camera
     this.az = -1.02; this.el = 0.52; this.dist = 100;
     this.centre = [0, 0, 0];
+    this.teeth = 0;
     this.target = [0, 0, 0];
     this.framed = false;
     this.radius = 30;
@@ -257,6 +257,7 @@ class View {
     gl.bindVertexArray(null);
 
     this.centre = [0, 0, geom.width / 2];
+    this.teeth = geom.teeth;
     this.radius = Math.hypot(geom.r_tip, geom.width / 2);
     if (!this.framed) { this.target = this.centre.slice(); this.framed = true; }
     this.dirty = true;
@@ -267,11 +268,16 @@ class View {
     // a meshing pair sits between the two axes
     this.target = [c[0] + (pair ? this.pairDist / 2 : 0), c[1], c[2]];
     // bounding sphere of what is on screen, fitted to the narrower field
-    const span = pair ? this.pairDist / 2 + this.radius : this.radius;
+    const span = this.span();
     const asp = Math.max(this.cv.clientWidth, 1) / Math.max(this.cv.clientHeight, 1);
     const half = Math.min(FOV / 2, Math.atan(Math.tan(FOV / 2) * asp));
     this.dist = span / Math.sin(half) * 1.05;
     this.dirty = true;
+  }
+  /// Radius of the bounding sphere around the camera target.
+  span() {
+    const pair = this.opts.pair && this.pairDist > 0;
+    return pair ? this.pairDist / 2 + this.radius : this.radius;
   }
   hookInput() {
     const cv = this.cv;
@@ -340,8 +346,11 @@ class View {
     if (!this.count) return;
 
     const eye = this.eye();
-    const near = Math.max(this.dist * 0.005, this.radius * 0.002);
-    const proj = M4.persp(FOV, w / h, near, this.dist + this.radius * 12);
+    // Keep the depth range as tight as the scene allows: a slack far plane is
+    // what makes edges poke through the faces in front of them.
+    const span = this.span() * 1.25;
+    const near = Math.max(this.dist - span, span * 0.01);
+    const proj = M4.persp(FOV, w / h, near, this.dist + span);
     const view = M4.lookAt(eye, this.target, [0, 0, 1]);
     const vp = M4.mul(proj, view);
 
@@ -359,7 +368,12 @@ class View {
       gl.uniform3fv(this.u.base, new Float32Array(base));
       gl.uniform1f(this.u.flip, flip);
       gl.bindVertexArray(this.vao);
+      // push the filled faces a hair away from the eye so the edges that lie
+      // exactly on them win, without lifting the ones behind them
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(1.0, 1.0);
       gl.drawElements(gl.TRIANGLES, this.count, gl.UNSIGNED_INT, 0);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
       if (this.opts.edges && this.lineCount) {
         gl.useProgram(this.lprog);
         gl.uniformMatrix4fv(this.lu.mvp, false, mvp);
@@ -376,11 +390,13 @@ class View {
     const steel = [0.30, 0.335, 0.395];
     const brass = [0.50, 0.345, 0.13];
     drawOne(M4.rotZ(this.spin), 1, steel, false);
-    if (this.opts.pair && this.pairDist > 0) {
-      // the mate is the mirror image of this gear about x = a/2: an exact
-      // conjugate mesh, and for helical gears the opposite hand, as it should be
+    if (this.opts.pair && this.pairDist > 0 && this.teeth > 0) {
+      // The mate is this gear mirrored about the plane x = a/2, turned by half
+      // a pitch so its teeth land in these gaps instead of on them. The mirror
+      // makes it counter-rotate on its own and, for a helical gear, gives it
+      // the opposite hand - which is what a parallel axis pair needs.
       const m = M4.mul(M4.trans(this.pairDist, 0, 0),
-        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.spin)));
+        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.spin + Math.PI / this.teeth)));
       drawOne(m, -1, brass, true);
     }
     gl.frontFace(gl.CCW);

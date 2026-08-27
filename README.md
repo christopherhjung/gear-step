@@ -112,8 +112,11 @@ parameters (bar the timestamp in the header).
 A few extras that only make sense interactively:
 
 * **mesh pair** - draws the mate as the mirror image of the gear about the
-  plane halfway to the second axis, which is an exact conjugate mesh at the
-  printed centre distance, and for a helical gear the opposite hand.
+  plane halfway to the second axis, turned by half a pitch so its teeth land
+  in these gaps rather than on these teeth. That is an exact conjugate mesh at
+  the printed centre distance, it counter-rotates on its own, and for a helical
+  gear it comes out the opposite hand, which is what a parallel axis pair
+  needs.
 * **spin** - rotates both.
 * **copy link** - the whole parameter set lives in the URL fragment.
 
