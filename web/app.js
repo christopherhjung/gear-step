@@ -112,6 +112,15 @@ const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / 
 
 const FOV = 0.72;   // vertical field of view, radians
 
+// Three point rig, given in camera space: +x right, +y up, +z out of the
+// screen towards the viewer. It rides with the eye, so the model is lit the
+// same way from every angle instead of going flat when you orbit behind it.
+const RIG = {
+  key: [0.62, 0.66, 0.42],   // high and to the right of the camera
+  fill: [-0.82, -0.28, 0.50], // opposite side, low, soft
+  rim: [-0.15, 0.72, -0.68],  // behind the model, picks out the silhouette
+};
+
 const VS = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos;
@@ -130,6 +139,7 @@ precision highp float;
 in vec3 vN; in vec3 vP;
 uniform vec3 uEye;
 uniform vec3 uBase;
+uniform vec3 uKey, uFill, uRim;
 out vec4 frag;
 
 vec3 aces(vec3 x){
@@ -141,11 +151,13 @@ void main(){
   if (!gl_FrontFacing) N = -N;
   vec3 V = normalize(uEye - vP);
 
-  vec3 key  = normalize(vec3( 0.78, 0.50, 0.38));
-  vec3 fill = normalize(vec3(-0.85, 0.05, 0.15));
-  vec3 rim  = normalize(vec3( 0.10,-0.90,-0.10));
+  vec3 key  = uKey;
+  vec3 fill = uFill;
+  vec3 rim  = uRim;
 
-  // hemisphere ambient: cool sky above, near black below
+  // hemisphere ambient: cool sky above, near black below. This one stays put
+  // in world space - it is the environment, and it keeps a sense of which way
+  // is up while the lamps ride along with the eye.
   vec3 amb = mix(vec3(0.010,0.014,0.022), vec3(0.16,0.21,0.29), N.z*0.5+0.5);
 
   vec3 col = uBase * (amb + 1.30*max(dot(N,key),0.0) + 0.30*max(dot(N,fill),0.0));
@@ -189,6 +201,9 @@ class View {
       nrm: gl.getUniformLocation(this.prog, 'uNrmMat'),
       eye: gl.getUniformLocation(this.prog, 'uEye'),
       base: gl.getUniformLocation(this.prog, 'uBase'),
+      key: gl.getUniformLocation(this.prog, 'uKey'),
+      fill: gl.getUniformLocation(this.prog, 'uFill'),
+      rim: gl.getUniformLocation(this.prog, 'uRim'),
     };
     this.lu = {
       mvp: gl.getUniformLocation(this.lprog, 'uMVP'),
@@ -352,6 +367,17 @@ class View {
     const view = M4.lookAt(eye, this.target, [0, 0, 1]);
     const vp = M4.mul(proj, view);
 
+    // camera basis: `right` straight from the azimuth, so it never degenerates
+    const fwd = norm(sub(this.target, eye));
+    const right = [Math.cos(this.az + Math.PI / 2), Math.sin(this.az + Math.PI / 2), 0];
+    const up = cross(right, fwd);
+    const toWorld = (l) => norm([
+      l[0] * right[0] + l[1] * up[0] - l[2] * fwd[0],
+      l[0] * right[1] + l[1] * up[1] - l[2] * fwd[1],
+      l[0] * right[2] + l[1] * up[2] - l[2] * fwd[2],
+    ]);
+    const key = toWorld(RIG.key), fill = toWorld(RIG.fill), rim = toWorld(RIG.rim);
+
     const drawOne = (model, base, mirrored) => {
       gl.frontFace(mirrored ? gl.CW : gl.CCW);
       const mvp = M4.mul(vp, model);
@@ -364,6 +390,9 @@ class View {
         model[8], model[9], model[10]]));
       gl.uniform3fv(this.u.eye, new Float32Array(eye));
       gl.uniform3fv(this.u.base, new Float32Array(base));
+      gl.uniform3fv(this.u.key, new Float32Array(key));
+      gl.uniform3fv(this.u.fill, new Float32Array(fill));
+      gl.uniform3fv(this.u.rim, new Float32Array(rim));
       gl.bindVertexArray(this.vao);
       // push the filled faces a hair away from the eye so the edges that lie
       // exactly on them win, without lifting the ones behind them
