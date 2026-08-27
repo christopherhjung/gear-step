@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gear-step - involute gear lab</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ------------------------------------------------ settings -->
+  <aside class="panel" id="controls">
+    <header class="brand">
+      <h1><b>gear</b>-step</h1>
+      <p>parametric involute gears, hobbed root fillet, STEP AP214 out</p>
+    </header>
+
+    <details class="group" open>
+      <summary>Size</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>tooth size given as</label>
+          <div class="seg" id="sizeMode">
+            <button data-v="module" aria-pressed="true">module</button>
+            <button data-v="pitch" aria-pressed="false">pitch</button>
+            <button data-v="dp" aria-pressed="false">DP</button>
+          </div>
+        </div>
+        <div class="field" data-num="size">
+          <label><span id="sizeLabel">normal module m_n</span><span class="unit" id="sizeUnit">mm</span></label>
+          <div class="row">
+            <input type="range" id="size_r" min="0.2" max="10" step="0.05" value="2">
+            <input type="number" id="size" step="0.05" value="2">
+          </div>
+        </div>
+        <div class="field">
+          <label>teeth z<span class="unit">3 - 400</span></label>
+          <div class="row">
+            <input type="range" id="z_r" min="5" max="140" step="1" value="24">
+            <input type="number" id="z" min="3" max="400" step="1" value="24">
+          </div>
+        </div>
+        <div class="field">
+          <label>face width b<span class="unit">mm</span></label>
+          <div class="row">
+            <input type="range" id="width_r" min="1" max="80" step="0.5" value="12">
+            <input type="number" id="width" step="0.5" value="12">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Tooth</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>pressure angle a_n<span class="unit">deg</span></label>
+          <div class="row">
+            <input type="range" id="alpha_r" min="12" max="30" step="0.5" value="20">
+            <input type="number" id="alpha" step="0.5" value="20">
+          </div>
+        </div>
+        <div class="field">
+          <label>helix angle b<span class="unit">deg</span></label>
+          <div class="row">
+            <input type="range" id="beta_r" min="0" max="45" step="0.5" value="0">
+            <input type="number" id="beta" step="0.5" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>hand</label>
+          <div class="seg" id="hand">
+            <button data-v="right" aria-pressed="true">right</button>
+            <button data-v="left" aria-pressed="false">left</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>profile shift x<span class="unit">x m_n</span></label>
+          <div class="row">
+            <input type="range" id="shift_r" min="-0.8" max="1" step="0.01" value="0">
+            <input type="number" id="shift" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>backlash<span class="unit">mm at d</span></label>
+          <div class="row">
+            <input type="range" id="backlash_r" min="0" max="0.5" step="0.01" value="0">
+            <input type="number" id="backlash" step="0.01" value="0">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>Basic rack</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>addendum h_a*<span class="unit">ISO 53: 1.00</span></label>
+          <div class="row">
+            <input type="range" id="ha_r" min="0.6" max="1.4" step="0.01" value="1">
+            <input type="number" id="ha" step="0.01" value="1">
+          </div>
+        </div>
+        <div class="field">
+          <label>dedendum h_f*<span class="unit">ISO 53: 1.25</span></label>
+          <div class="row">
+            <input type="range" id="hf_r" min="1" max="1.6" step="0.01" value="1.25">
+            <input type="number" id="hf" step="0.01" value="1.25">
+          </div>
+        </div>
+        <div class="field">
+          <label>cutter tip radius r*<span class="unit">ISO 53: 0.38</span></label>
+          <div class="row">
+            <input type="range" id="rho_r" min="0" max="0.5" step="0.01" value="0.38">
+            <input type="number" id="rho" step="0.01" value="0.38">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Bore</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>bore diameter<span class="unit">0 = solid</span></label>
+          <div class="row">
+            <input type="range" id="bore_r" min="0" max="80" step="0.5" value="20">
+            <input type="number" id="bore" step="0.5" value="20">
+          </div>
+        </div>
+        <div class="field">
+          <label>bore profile</label>
+          <select id="keymode">
+            <option value="1">keyway, DIN 6885-1 auto</option>
+            <option value="0">plain round</option>
+            <option value="2">keyway, custom b x t2</option>
+            <option value="3">D flat (one flat)</option>
+            <option value="4">double D (two flats)</option>
+          </select>
+        </div>
+        <div class="field" id="keyCustom" hidden>
+          <label>key width b / hub depth t2<span class="unit">mm</span></label>
+          <div class="row">
+            <input type="number" id="key_b" step="0.1" value="6">
+            <input type="number" id="key_t2" step="0.1" value="2.8">
+          </div>
+        </div>
+        <div class="field" id="keyFlat" hidden>
+          <label><span id="flatLabel">across flat</span><span class="unit">mm</span></label>
+          <div class="row">
+            <input type="range" id="across_r" min="0.5" max="80" step="0.1" value="18">
+            <input type="number" id="across" step="0.1" value="18">
+          </div>
+        </div>
+        <div class="field">
+          <label>bore angle<span class="unit">deg, 0 = +Y</span></label>
+          <div class="row">
+            <input type="range" id="boreang_r" min="0" max="360" step="1" value="0">
+            <input type="number" id="boreang" step="1" value="0">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>Lightening holes</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>count<span class="unit">0 = none</span></label>
+          <div class="row">
+            <input type="range" id="holes_r" min="0" max="12" step="1" value="0">
+            <input type="number" id="holes" step="1" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>hole diameter<span class="unit">mm</span></label>
+          <div class="row">
+            <input type="range" id="holedia_r" min="1" max="40" step="0.5" value="8">
+            <input type="number" id="holedia" step="0.5" value="8">
+          </div>
+        </div>
+        <div class="field">
+          <label>bolt circle<span class="unit">mm</span></label>
+          <div class="row">
+            <input type="range" id="holecircle_r" min="2" max="200" step="0.5" value="34">
+            <input type="number" id="holecircle" step="0.5" value="34">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group">
+      <summary>Output &amp; quality</summary>
+      <div class="group-body">
+        <div class="field">
+          <label>product name</label>
+          <input type="text" id="name" placeholder="gear_z24_m2">
+        </div>
+        <div class="field">
+          <label>phase<span class="unit">deg, for meshing pairs</span></label>
+          <div class="row">
+            <input type="range" id="phase_r" min="0" max="30" step="0.5" value="0">
+            <input type="number" id="phase" step="0.5" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>involute points per flank<span class="unit">4 - 60</span></label>
+          <div class="row">
+            <input type="range" id="flankseg_r" min="4" max="60" step="1" value="16">
+            <input type="number" id="flankseg" step="1" value="16">
+          </div>
+        </div>
+        <div class="field">
+          <label>root fillet points<span class="unit">4 - 40</span></label>
+          <div class="row">
+            <input type="range" id="filletseg_r" min="4" max="40" step="1" value="10">
+            <input type="number" id="filletseg" step="1" value="10">
+          </div>
+        </div>
+        <div class="field">
+          <label>helical loft sections<span class="unit">0 = auto</span></label>
+          <div class="row">
+            <input type="range" id="layers_r" min="0" max="60" step="1" value="0">
+            <input type="number" id="layers" step="1" value="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>pin diameter d_M<span class="unit">mm, 0 = 1.68 m</span></label>
+          <div class="row">
+            <input type="range" id="pin_r" min="0" max="20" step="0.01" value="0">
+            <input type="number" id="pin" step="0.01" value="0">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" open>
+      <summary>Presets</summary>
+      <div class="group-body" id="presets"></div>
+    </details>
+  </aside>
+
+  <!-- ------------------------------------------------ viewport -->
+  <main id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="profile"></canvas>
+    <div id="hud">
+      <button class="chip" id="tab3d" aria-pressed="true">3D</button>
+      <button class="chip" id="tab2d" aria-pressed="false">profile</button>
+      <button class="chip" id="tEdges" aria-pressed="true">edges</button>
+      <button class="chip" id="tSpin" aria-pressed="false">spin</button>
+      <button class="chip" id="tPair" aria-pressed="false">mesh pair</button>
+      <button class="chip" id="tFit">fit</button>
+    </div>
+    <div id="stats"></div>
+    <div id="hint">drag orbit &middot; wheel zoom &middot; shift-drag pan</div>
+    <div id="busy">generating&hellip;</div>
+  </main>
+
+  <!-- ------------------------------------------------ data sheet -->
+  <aside class="panel" id="sheet">
+    <header class="brand">
+      <h1>data sheet</h1>
+      <p class="sheet-name" id="sheetName">-</p>
+    </header>
+    <div class="dl">
+      <button class="primary" id="dlStep">STEP</button>
+      <button id="dlStl">STL</button>
+      <button id="dlSvg">SVG</button>
+      <button id="dlLink">copy link</button>
+    </div>
+    <div id="warn"></div>
+    <div id="rows"></div>
+  </aside>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

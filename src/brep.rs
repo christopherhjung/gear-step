@@ -11,6 +11,7 @@
 use crate::nurbs::{self, Curve};
 use crate::profile::Seg;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 pub struct Model {
     /// outer contour, rotates linearly from z0 to z1 by `twist`
@@ -507,12 +508,36 @@ fn esc(s: &str) -> String {
     s.replace('\\', "").replace('\'', "''")
 }
 
+/// Epoch seconds used in the STEP header. Hosts without a clock (wasm) set
+/// this from the outside; -1 means "ask the platform".
+static EPOCH: AtomicI64 = AtomicI64::new(-1);
+
+/// Override the timestamp written into the STEP header.
+pub fn set_epoch(secs: i64) {
+    EPOCH.store(secs, Ordering::Relaxed);
+}
+
+fn now_secs() -> i64 {
+    let o = EPOCH.load(Ordering::Relaxed);
+    if o >= 0 {
+        return o;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        0
+    }
+}
+
 fn timestamp() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let secs = now_secs();
     let days = secs / 86400;
     let rem = secs % 86400;
     let (mut y, mut dd) = (1970i64, days);

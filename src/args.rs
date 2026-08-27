@@ -1,43 +1,14 @@
-//! Tiny dependency-free argument parser.
+//! Tiny dependency-free argument parser. Fills in the shared `Spec` plus the
+//! handful of options that only make sense on the command line.
 
+use gear_step::api::{Key, Spec};
 use std::f64::consts::PI;
 
-pub struct Args {
-    pub z: u32,
-    pub m_n: f64,
-    pub alpha_n_deg: f64,
-    pub beta_deg: f64,
-    pub width: f64,
-    pub x: f64,
-    pub ha: f64,
-    pub hf: f64,
-    pub rho: f64,
-    pub backlash: f64,
-    pub bore: f64,
-    pub key: Key,
-    pub key_angle_deg: f64,
-    pub holes: u32,
-    pub hole_dia: f64,
-    pub hole_circle: f64,
-    pub phase_deg: f64,
-    pub flank_seg: usize,
-    pub fillet_seg: usize,
-    pub layers: usize,
-    pub pin_dia: f64,
-    pub name: String,
+/// Command line only options.
+pub struct Cli {
     pub out: String,
     pub svg: Option<String>,
     pub quiet: bool,
-}
-
-pub enum Key {
-    None,
-    Auto,
-    Custom(f64, f64),
-    /// one flat, value = dimension across (flat to opposite wall)
-    DFlat(f64),
-    /// two flats, value = dimension between them
-    DoubleD(f64),
 }
 
 pub const HELP: &str = r#"gear-step - parametric involute gear generator with STEP (AP214) export
@@ -100,34 +71,9 @@ fn num(v: &str, k: &str) -> Result<f64, String> {
     v.parse::<f64>().map_err(|_| format!("{}: '{}' is not a number", k, v))
 }
 
-pub fn parse(argv: &[String]) -> Result<Option<Args>, String> {
-    let mut a = Args {
-        z: 0,
-        m_n: 1.0,
-        alpha_n_deg: 20.0,
-        beta_deg: 0.0,
-        width: 0.0,
-        x: 0.0,
-        ha: 1.0,
-        hf: 1.25,
-        rho: 0.38,
-        backlash: 0.0,
-        bore: 0.0,
-        key: Key::Auto,
-        key_angle_deg: 0.0,
-        holes: 0,
-        hole_dia: 0.0,
-        hole_circle: 0.0,
-        phase_deg: 0.0,
-        flank_seg: 16,
-        fillet_seg: 10,
-        layers: 0,
-        pin_dia: 0.0,
-        name: String::new(),
-        out: String::new(),
-        svg: None,
-        quiet: false,
-    };
+pub fn parse(argv: &[String]) -> Result<Option<(Spec, Cli)>, String> {
+    let mut a = Spec { z: 0, m_n: 1.0, width: 0.0, ..Spec::default() };
+    let mut cli = Cli { out: String::new(), svg: None, quiet: false };
     let mut hand_left = false;
     let mut flat_depth: Option<f64> = None;
     let mut size_given = 0;
@@ -150,7 +96,7 @@ pub fn parse(argv: &[String]) -> Result<Option<Args>, String> {
                 print!("{}", HELP);
                 return Ok(None);
             }
-            "-q" | "--quiet" => a.quiet = true,
+            "-q" | "--quiet" => cli.quiet = true,
             "-z" | "--teeth" => a.z = num(&val()?, "--teeth")? as u32,
             "--module" | "--mn" | "-m" => {
                 a.m_n = num(&val()?, "--module")?;
@@ -204,26 +150,14 @@ pub fn parse(argv: &[String]) -> Result<Option<Args>, String> {
             "--layers" => a.layers = num(&val()?, "--layers")? as usize,
             "--pin" => a.pin_dia = num(&val()?, "--pin")?,
             "--name" => a.name = val()?,
-            "-o" | "--out" => a.out = val()?,
-            "--svg" => a.svg = Some(val()?),
+            "-o" | "--out" => cli.out = val()?,
+            "--svg" => cli.svg = Some(val()?),
             other => return Err(format!("unknown option '{}' (try --help)", other)),
         }
         i += 1;
     }
-    if a.z < 3 {
-        return Err("--teeth must be >= 3".into());
-    }
-    if a.width <= 0.0 {
-        return Err("--width must be > 0".into());
-    }
-    if a.m_n <= 0.0 {
-        return Err("module must be > 0".into());
-    }
     if size_given > 1 {
         return Err("use only one of --module / --pitch / --dp".into());
-    }
-    if a.holes > 0 && (a.hole_dia <= 0.0 || a.hole_circle <= 0.0) {
-        return Err("--holes needs --hole-dia and --hole-circle".into());
     }
     if let Some(t) = flat_depth {
         if t <= 0.0 || t >= a.bore {
@@ -234,14 +168,9 @@ pub fn parse(argv: &[String]) -> Result<Option<Args>, String> {
     if hand_left {
         a.beta_deg = -a.beta_deg.abs();
     }
-    if a.name.is_empty() {
-        a.name = format!("gear_z{}_m{}", a.z, a.m_n);
+    a.normalise()?;
+    if cli.out.is_empty() {
+        cli.out = format!("{}.step", a.name);
     }
-    if a.out.is_empty() {
-        a.out = format!("{}.step", a.name);
-    }
-    if a.pin_dia <= 0.0 {
-        a.pin_dia = (1.68 * a.m_n * 100.0).round() / 100.0;
-    }
-    Ok(Some(a))
+    Ok(Some((a, cli)))
 }

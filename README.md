@@ -7,6 +7,9 @@ Parametric involute gear generator with STEP AP214 export. No dependencies,
 gear-step -z 24 --module 2 --width 12 --bore 20 -o pinion.step
 ```
 
+The same generator also compiles to WebAssembly and runs in a browser with a
+3D viewer and a settings panel - see [In the browser](#in-the-browser).
+
 ## What it generates
 
 External spur and helical gears, generated the way a rack cutter (hob) makes
@@ -77,6 +80,48 @@ normal tooth thickness, base tangent length `W` over `k` teeth, measurement over
 pins (pin diameter defaults to 1.68·m), tooth height, centre distance with an
 equal gear, and for helical gears the axial pitch and overlap ratio. Plus the
 topology check of the exported shell.
+
+
+## In the browser
+
+The whole generator (geometry, STEP writer, SVG dump) compiles to
+`wasm32-unknown-unknown` with no toolchain beyond stable Rust - no bindgen, no
+npm, no bundler. `src/wasm.rs` exports a handful of `extern "C"` functions; the
+page writes a block of `f64` parameters into linear memory, calls
+`gear_generate`, and reads the mesh, the STEP text and the data sheet straight
+back out.
+
+```
+rustup target add wasm32-unknown-unknown
+./build.sh serve            # builds, then serves web/ on localhost:8080
+```
+
+`build.sh` produces two things:
+
+| | |
+|---|---|
+| `web/` | `index.html` + `app.js` + `gear.wasm`, needs any static file server |
+| `dist/gear-step.html` | the same app as **one** file, wasm inlined, opens from disk |
+
+The page has the full parameter set of the CLI, a WebGL viewer for the display
+mesh, the transverse profile with pitch/base/form/root/tip circles, and
+downloads for STEP, STL and SVG. Every change regenerates the real solid: the
+STEP the browser hands you is byte for byte what the CLI writes for the same
+parameters (bar the timestamp in the header).
+
+A few extras that only make sense interactively:
+
+* **mesh pair** - draws the mate as the mirror image of the gear about the
+  plane halfway to the second axis, which is an exact conjugate mesh at the
+  printed centre distance, and for a helical gear the opposite hand.
+* **spin** - rotates both.
+* **copy link** - the whole parameter set lives in the URL fragment.
+
+The display mesh is a separate, purely triangular tessellation
+(`src/mesh.rs`, with an ear clipping triangulator in `src/earcut.rs`); the
+exported solid stays analytic. `cargo test` checks that the mesh is a closed
+manifold whose volume matches the analytic cross-section for a spread of
+parameter sets.
 
 ## Not implemented
 

@@ -96,7 +96,7 @@ impl GearParams {
         let z_min = 2.0 * (self.ha_c - self.x) / (alpha_t.sin() * alpha_t.sin());
         if z < z_min - 1e-9 {
             warnings.push(format!(
-                "undercut expected: z = {} < z_min = {:.1} (use --shift {:.3} or more)",
+                "undercut expected: z = {} < z_min = {:.1} (use a profile shift of {:.3} or more)",
                 self.z,
                 z_min,
                 (self.ha_c - z * alpha_t.sin().powi(2) / 2.0).max(0.0)
