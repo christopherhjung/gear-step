@@ -111,6 +111,7 @@ const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / 
 // ------------------------------------------------------------- gl renderer
 
 const FOV = 0.72;   // vertical field of view, radians
+const DEFAULT_RPM = 6;   // spin speed the slider starts at
 
 // Three point rig, given in camera space: +x right, +y up, +z out of the
 // screen towards the viewer. It rides with the eye, so the model is lit the
@@ -226,6 +227,7 @@ class View {
     this.framed = false;
     this.radius = 30;
     this.spin = 0;
+    this.spinRate = DEFAULT_RPM * Math.PI / 30;   // rad/s, sign gives the sense
     this.opts = { edges: true, spin: false, pair: false };
     this.pairDist = 0;
     this.dirty = true;
@@ -348,7 +350,10 @@ class View {
   }
   draw(dt) {
     this.resize();
-    if (this.opts.spin) { this.spin += dt * 0.55; this.dirty = true; }
+    if (this.opts.spin && this.spinRate !== 0) {
+      this.spin += dt * this.spinRate;
+      this.dirty = true;
+    }
     if (!this.dirty) return;
     this.dirty = false;
     const gl = this.gl;
@@ -790,14 +795,42 @@ function buildPresets() {
   }
 }
 
-function toggleChip(id, key) {
+function toggleChip(id, key, after) {
   const el = $(id);
   el.addEventListener('click', () => {
     view.opts[key] = !view.opts[key];
     el.setAttribute('aria-pressed', String(view.opts[key]));
     if (key === 'pair') view.fit();
+    if (after) after(view.opts[key]);
     view.dirty = true;
   });
+}
+
+/// Speed slider next to the spin chip. Zero stops it, negative runs it the
+/// other way, and dragging off zero starts it so the slider does something
+/// visible on its own.
+function wireSpin() {
+  const slider = $('spinRate'), out = $('spinRpm'), chip = $('tSpin');
+  const show = (rpm) => {
+    out.textContent = `${rpm} rpm`;
+    view.spinRate = rpm * Math.PI / 30;
+  };
+  slider.addEventListener('input', () => {
+    const rpm = Number(slider.value);
+    show(rpm);
+    const on = rpm !== 0;
+    view.opts.spin = on;
+    chip.setAttribute('aria-pressed', String(on));
+    view.dirty = true;
+  });
+  toggleChip('tSpin', 'spin', (on) => {
+    // starting from a stopped slider would look broken, so give it a nudge
+    if (on && Number(slider.value) === 0) {
+      slider.value = DEFAULT_RPM;
+      show(DEFAULT_RPM);
+    }
+  });
+  show(Number(slider.value));
 }
 
 async function main() {
@@ -827,7 +860,7 @@ async function main() {
 
   buildPresets();
   toggleChip('tEdges', 'edges');
-  toggleChip('tSpin', 'spin');
+  wireSpin();
   toggleChip('tPair', 'pair');
   $('tFit').addEventListener('click', () => {
     if (document.body.classList.contains('mode-2d')) profile.reset(); else view.fit();

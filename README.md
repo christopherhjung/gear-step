@@ -130,7 +130,8 @@ A few extras that only make sense interactively:
   the printed centre distance, it counter-rotates on its own, and for a helical
   gear it comes out the opposite hand, which is what a parallel axis pair
   needs.
-* **spin** - rotates both.
+* **spin** - rotates both, at the speed set by the slider beside it in
+  rev/min. Zero stops it, negative runs it the other way.
 * **copy link** - the whole parameter set lives in the URL fragment.
 
 The display mesh is a separate, purely triangular tessellation

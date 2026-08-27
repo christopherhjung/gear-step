@@ -156,6 +156,25 @@ body.mode-2d #profile { display: block; }
 }
 .chip:hover { color: var(--text); border-color: #38424f; }
 .chip[aria-pressed=true] { color: #1a1206; background: var(--accent); border-color: var(--accent); }
+.chip.readout { cursor: default; min-width: 62px; text-align: center; color: #7f8b9c; }
+
+/* speed slider, dressed to sit among the chips */
+.chip-range {
+  -webkit-appearance: none; appearance: none;
+  width: 96px; height: 24px; padding: 0 9px; margin: 0;
+  background: #131924cc; border: 1px solid var(--line); border-radius: 999px;
+  backdrop-filter: blur(6px); cursor: pointer;
+}
+.chip-range:hover { border-color: #38424f; }
+.chip-range::-webkit-slider-runnable-track { height: 3px; background: var(--line); border-radius: 2px; }
+.chip-range::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 11px; margin-top: -4px;
+  border-radius: 50%; background: var(--accent); border: none;
+}
+.chip-range::-moz-range-track { height: 3px; background: var(--line); border-radius: 2px; }
+.chip-range::-moz-range-thumb {
+  width: 11px; height: 11px; border-radius: 50%; background: var(--accent); border: none;
+}
 #stats {
   position: absolute; left: 14px; bottom: 12px;
   font: 11px var(--mono); color: #63708499; pointer-events: none;
