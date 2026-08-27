@@ -368,9 +368,18 @@ impl Built {
             format!("{:.4} mm (d_M = {:.2} mm)", m, a.pin_dia),
         ));
         rows.push(kv("tooth height h", format!("{:.4} mm", g.r_a - g.r_f)));
+        let (a_w, alpha_w) = g.centre_distance(p);
         rows.push(kv(
             "centre distance with equal gear",
-            format!("{:.4} mm", 2.0 * g.r_p + 2.0 * p.x * p.m_n),
+            format!("{:.4} mm", a_w),
+        ));
+        rows.push(kv(
+            "operating pressure angle alpha_w",
+            format!("{:.4} deg", alpha_w / D2R),
+        ));
+        rows.push(kv(
+            "tip clearance with equal gear",
+            format!("{:.4} mm", g.pair_clearance(p)),
         ));
         if p.beta.abs() > 1e-12 {
             rows.push(kv(

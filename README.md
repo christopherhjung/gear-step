@@ -79,9 +79,10 @@ flank). For a mating pair, put the full backlash on one gear or split it.
 
 Printed on every run: pitch/base/tip/root and **form** diameter, transverse and
 normal tooth thickness, base tangent length `W` over `k` teeth, measurement over
-pins (pin diameter defaults to 1.68·m), tooth height, centre distance with an
-equal gear, and for helical gears the axial pitch and overlap ratio. Plus the
-topology check of the exported shell.
+pins (pin diameter defaults to 1.68·m), tooth height, the zero backlash working
+centre distance with an equal gear together with its operating pressure angle
+and tip clearance, and for helical gears the axial pitch and overlap ratio.
+Plus the topology check of the exported shell.
 
 
 ## In the browser
@@ -126,12 +127,20 @@ A few extras that only make sense interactively:
 
 * **mesh pair** - draws the mate as the mirror image of the gear about the
   plane halfway to the second axis, turned by half a pitch so its teeth land
-  in these gaps rather than on these teeth. That is an exact conjugate mesh at
-  the printed centre distance, it counter-rotates on its own, and for a helical
-  gear it comes out the opposite hand, which is what a parallel axis pair
-  needs.
-* **spin** - rotates both, at the speed set by the slider beside it in
-  rev/min. Zero stops it, negative runs it the other way.
+  in these gaps rather than on these teeth. It sits at the working centre
+  distance, `a_w = 2·r_b/cos(alpha_w)` with
+  `inv(alpha_w) = inv(alpha_t) + 2·x·tan(alpha_n)/z`, so a profile shifted pair
+  meshes tight rather than at the `a + 2·x·m` approximation, which is always a
+  little too wide. It counter-rotates on its own, and for a helical gear it
+  comes out the opposite hand, which is what a parallel axis pair needs.
+* **spin** - runs the pair as a driveline rather than stepping a fixed angle.
+  The slider commands the driver's speed in rev/min; it eases up to that
+  instead of jumping to it, and switching the drive off lets both coast down.
+  The follower is a body of its own with its own momentum, tied to the driver
+  only through the flanks: inside the backlash allowance it freewheels, so
+  reversing shows the lash being taken up before the far flank picks it up
+  again. The play is `2·backlash/r_p` in radians - the operating pressure angle
+  drops out - so at the default zero backlash the pair stays rigid.
 * **copy link** - the whole parameter set lives in the URL fragment.
 
 The display mesh is a separate, purely triangular tessellation

@@ -226,8 +226,14 @@ class View {
     this.target = [0, 0, 0];
     this.framed = false;
     this.radius = 30;
-    this.spin = 0;
-    this.spinRate = DEFAULT_RPM * Math.PI / 30;   // rad/s, sign gives the sense
+    // driveline state: the driver is speed controlled, the follower is only
+    // pushed when a flank is touching it
+    this.th1 = 0;        // driver angle, rad
+    this.w1 = 0;         // driver speed, rad/s
+    this.beta = 0;       // follower's own angle parameter, rad
+    this.w2 = 0;         // and its speed
+    this.lashHalf = 0;   // half the angular play, rad
+    this.cmd = DEFAULT_RPM * Math.PI / 30;   // commanded speed, sign = sense
     this.opts = { edges: true, spin: false, pair: false };
     this.pairDist = 0;
     this.dirty = true;
@@ -273,6 +279,7 @@ class View {
 
     this.centre = [0, 0, geom.width / 2];
     this.teeth = geom.teeth;
+    this.lashHalf = (geom.backlash_rad || 0) / 2;
     this.radius = Math.hypot(geom.r_tip, geom.width / 2);
     if (!this.framed) { this.target = this.centre.slice(); this.framed = true; }
     this.dirty = true;
@@ -348,6 +355,60 @@ class View {
       this.dirty = true;
     }, { passive: false });
   }
+  /// One step of the driveline.
+  ///
+  /// The driver is a motor: it eases towards the commanded speed rather than
+  /// jumping to it. The follower is a separate body with its own momentum and
+  /// a little drag, tied to the driver only through the flanks: inside the
+  /// backlash band it coasts free, and when it runs out of band it meets a
+  /// flank and is carried along. So a reversal shows the lash being taken up,
+  /// and switching the drive off lets both coast down instead of freezing.
+  stepDrive(dt) {
+    const TAU_DRIVE = 0.28;   // how briskly the driver reaches the command, s
+    const TAU_COAST = 1.6;    // how long the follower freewheels for, s
+    const BOUNCE = 0.12;      // restitution when a flank is struck
+    const IMPACT = 0.05;      // rad/s below which contact is a rest, not a hit
+    const half = this.teeth > 0 ? Math.PI / this.teeth : 0;
+
+    const cmd = this.opts.spin ? this.cmd : 0;
+    const moving = Math.abs(this.w1) > 1e-4 || Math.abs(this.w2) > 1e-4;
+    if (!moving && cmd === 0) return;
+
+    this.w1 += (cmd - this.w1) * (1 - Math.exp(-dt / TAU_DRIVE));
+    this.th1 += this.w1 * dt;
+
+    if (this.lashHalf <= 1e-9) {
+      // no allowance: the pair is rigid
+      this.w2 = this.w1;
+      this.beta = this.th1 + half;
+    } else {
+      this.w2 *= Math.exp(-dt / TAU_COAST);      // freewheeling
+      this.beta += this.w2 * dt;
+      let u = this.beta - this.th1 - half;       // offset within the band
+      const L = this.lashHalf;
+      if (u > L || u < -L) {
+        u = u > L ? L : -L;
+        const rel = this.w2 - this.w1;
+        // Only a real approach speed counts as a hit and bounces. Drag alone
+        // pressing the follower onto a flank it is already touching is resting
+        // contact: it just gets carried, or the pair would buzz for ever.
+        const hit = (u > 0 ? rel > 0 : rel < 0) && Math.abs(rel) > IMPACT;
+        this.w2 = hit ? this.w1 - BOUNCE * rel : this.w1;
+        this.beta = this.th1 + half + u;
+      }
+    }
+
+    // keep the angles small so long runs stay precise; a whole turn leaves
+    // the offset between the two untouched
+    const TWO_PI = Math.PI * 2;
+    if (this.th1 > TWO_PI || this.th1 < -TWO_PI) {
+      const n = Math.trunc(this.th1 / TWO_PI) * TWO_PI;
+      this.th1 -= n;
+      this.beta -= n;
+    }
+    this.dirty = true;
+  }
+
   /// Camera axes. Only the azimuth and elevation matter, so this is safe to
   /// call before moving the target.
   basis() {
@@ -380,10 +441,7 @@ class View {
   }
   draw(dt) {
     this.resize();
-    if (this.opts.spin && this.spinRate !== 0) {
-      this.spin += dt * this.spinRate;
-      this.dirty = true;
-    }
+    this.stepDrive(dt);
     if (!this.dirty) return;
     this.dirty = false;
     const gl = this.gl;
@@ -448,14 +506,14 @@ class View {
 
     const steel = [0.30, 0.335, 0.395];
     const brass = [0.50, 0.345, 0.13];
-    drawOne(M4.rotZ(this.spin), steel, false);
+    drawOne(M4.rotZ(this.th1), steel, false);
     if (this.opts.pair && this.pairDist > 0 && this.teeth > 0) {
       // The mate is this gear mirrored about the plane x = a/2, turned by half
       // a pitch so its teeth land in these gaps instead of on them. The mirror
       // makes it counter-rotate on its own and, for a helical gear, gives it
       // the opposite hand - which is what a parallel axis pair needs.
       const m = M4.mul(M4.trans(this.pairDist, 0, 0),
-        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.spin + Math.PI / this.teeth)));
+        M4.mul(M4.scale(-1, 1, 1), M4.rotZ(this.beta)));
       drawOne(m, brass, true);
     }
     gl.frontFace(gl.CCW);
@@ -764,7 +822,7 @@ function regenerate() {
   }
   last = res;
   view.upload(res.mesh, res.geom);
-  view.pairDist = 2 * res.geom.r_pitch + 2 * state.shift * moduleFromSize();
+  view.pairDist = res.geom.centre_distance;
   profile.set(res);
   renderSheet(res);
   renderWarnings(res.warnings, null);
@@ -844,14 +902,15 @@ function toggleChip(id, key, after) {
   });
 }
 
-/// Speed slider next to the spin chip. Zero stops it, negative runs it the
-/// other way, and dragging off zero starts it so the slider does something
-/// visible on its own.
+/// Speed slider next to the spin chip: it sets the speed the driver is asked
+/// for, not the frame to frame step. Zero stops it, negative runs it the other
+/// way, and dragging off zero starts it so the slider does something visible
+/// on its own.
 function wireSpin() {
   const slider = $('spinRate'), out = $('spinRpm'), chip = $('tSpin');
   const show = (rpm) => {
     out.textContent = `${rpm} rpm`;
-    view.spinRate = rpm * Math.PI / 30;
+    view.cmd = rpm * Math.PI / 30;
   };
   slider.addEventListener('input', () => {
     const rpm = Number(slider.value);

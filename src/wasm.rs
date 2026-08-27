@@ -190,6 +190,10 @@ fn run(spec: &Spec, want_step: bool) -> Result<State, String> {
         num("module_t", g.m_t),
         num("bore", built.spec.bore),
         num("alpha_t_deg", g.alpha_t.to_degrees()),
+        num("centre_distance", built.g.centre_distance(&built.p).0),
+        num("alpha_w_deg", built.g.centre_distance(&built.p).1.to_degrees()),
+        num("pair_clearance", built.g.pair_clearance(&built.p)),
+        num("backlash_rad", built.g.backlash_angle(&built.p)),
     ];
     j.push_str(&fields.join(","));
     j.push_str("},\"sheet\":[");

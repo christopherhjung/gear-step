@@ -347,6 +347,50 @@ impl Geom {
         worst
     }
 
+    /// Zero backlash working centre distance for a pair of two of these
+    /// gears, and the operating pressure angle that goes with it.
+    ///
+    /// The teeth mesh where their thicknesses add up to the pitch, which for
+    /// an equal pair means
+    ///     inv(alpha_w) = inv(alpha_t) + 2*x*tan(alpha_n)/z
+    /// and then a_w = 2*r_b/cos(alpha_w). The reference distance plus the
+    /// shift, a + 2*x*m_n, is only the usual first approximation of this and
+    /// always comes out a little too wide.
+    ///
+    /// The nominal tooth thickness is used, without the backlash allowance:
+    /// gears are cut thin and mounted at this distance, so the allowance
+    /// turns into play rather than pulling the axes closer together.
+    pub fn centre_distance(&self, p: &GearParams) -> (f64, f64) {
+        let z = p.z as f64;
+        let inv_w = inv(self.alpha_t) + 2.0 * p.x * p.alpha_n.tan() / z;
+        // Deeply negative shifts leave the teeth too thin to ever touch; there
+        // is no such distance then, so fall back on the reference one.
+        let alpha_w = if inv_w > 1e-12 { inv_inverse(inv_w) } else { self.alpha_t };
+        (2.0 * self.r_b / alpha_w.cos(), alpha_w)
+    }
+
+    /// Total angular play of a pair of these gears: how far one can be turned
+    /// with the other held still, in radians.
+    ///
+    /// The allowance thins each tooth by `backlash` at the reference pitch
+    /// circle. Carried out to the operating pitch circle each tooth is thin
+    /// there by r_w*backlash/r_p, so the two together leave a circumferential
+    /// gap of 2*r_w*backlash/r_p - which is 2*backlash/r_p as an angle. The
+    /// profile shift and the operating pressure angle both drop out.
+    pub fn backlash_angle(&self, p: &GearParams) -> f64 {
+        if self.r_p > 0.0 {
+            2.0 * p.backlash.max(0.0) / self.r_p
+        } else {
+            0.0
+        }
+    }
+
+    /// Tip to root clearance of that pair. Negative means the tips would foul
+    /// the mating roots and want shortening.
+    pub fn pair_clearance(&self, p: &GearParams) -> f64 {
+        self.centre_distance(p).0 - self.r_a - self.r_f
+    }
+
     /// Base tangent (span) measurement over k teeth, DIN 3960.
     pub fn span(&self, p: &GearParams) -> (u32, f64) {
         let z = p.z as f64;
