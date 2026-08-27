@@ -253,6 +253,7 @@ class View {
     this.lbo = gl.createBuffer();
     this.count = 0;
     this.lineCount = 0;
+    this.frames = 0;     // frames actually rendered, for the fps readout
 
     // camera
     this.az = -1.02; this.el = 0.52; this.dist = 100;
@@ -588,6 +589,7 @@ class View {
     this.stepDrive(dt);
     if (!this.dirty) return;
     this.dirty = false;
+    this.frames++;
     const gl = this.gl;
     const w = this.cv.width, h = this.cv.height;
     gl.viewport(0, 0, w, h);
@@ -670,7 +672,7 @@ class Profile {
   constructor(cv) {
     this.cv = cv; this.ctx = cv.getContext('2d');
     this.zoom = 1; this.ox = 0; this.oy = 0;
-    this.data = null; this.dirty = true;
+    this.data = null; this.dirty = true; this.frames = 0;
     let drag = null;
     cv.addEventListener('pointerdown', (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
     cv.addEventListener('pointermove', (e) => {
@@ -704,6 +706,7 @@ class Profile {
     if (this.cv.width !== w || this.cv.height !== h) { this.cv.width = w; this.cv.height = h; this.dirty = true; }
     if (!this.dirty) return;
     this.dirty = false;
+    this.frames++;
     const g = this.ctx;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#0b0e13';
@@ -961,7 +964,7 @@ function regenerate() {
   }
   if (!res.ok) {
     renderWarnings([], res.error);
-    $('stats').textContent = 'no solid: ' + res.error;
+    $('statsGeom').textContent = 'no solid: ' + res.error;
     return;
   }
   last = res;
@@ -971,7 +974,7 @@ function regenerate() {
   renderSheet(res);
   renderWarnings(res.warnings, null);
   const ms = performance.now() - t0;
-  $('stats').textContent =
+  $('statsGeom').textContent =
     `${res.counts.tris.toLocaleString()} triangles · ${(res.counts.step_bytes / 1024).toFixed(0)} kB STEP · ${ms.toFixed(0)} ms`;
   writeHash();
 }
@@ -1082,7 +1085,7 @@ async function main() {
   try {
     view = new View($('gl'));
   } catch (e) {
-    $('stats').textContent = e.message;
+    $('statsGeom').textContent = e.message;
     document.body.classList.add('mode-2d');
   }
   profile = new Profile($('profile'));
@@ -1161,16 +1164,28 @@ async function main() {
   window.gear = { wasm: gear, view, profile, state, regenerate, last: () => last, stlOf };
 
   let t = performance.now();
+  // Frames rendered, not callbacks fired: both views only draw when something
+  // has changed, so counting ticks would report the display rate while the
+  // page sat there doing nothing.
+  let fpsAt = t, fpsFrom = 0;
   const loop = (now) => {
     const dt = Math.min((now - t) / 1000, 0.1); t = now;
     if (view) view.draw(dt);
     profile.draw();
+    const drawn = (view ? view.frames : 0) + profile.frames;
+    if (now - fpsAt >= 500) {
+      const n = drawn - fpsFrom;
+      $('statsFps').textContent =
+        n > 0 ? ` · ${Math.round(n / ((now - fpsAt) / 1000))} fps` : ' · idle';
+      fpsAt = now;
+      fpsFrom = drawn;
+    }
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
 }
 
 main().catch((e) => {
-  document.getElementById('stats').textContent = 'failed: ' + e.message;
+  document.getElementById('statsGeom').textContent = 'failed: ' + e.message;
   console.error(e);
 });
