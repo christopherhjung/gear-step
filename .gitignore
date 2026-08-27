@@ -1,4 +1,5 @@
 /target
 /dist
+/_site
 /web/gear.wasm
 .idea

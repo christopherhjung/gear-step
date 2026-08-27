@@ -17,10 +17,17 @@ WASM=target/wasm32-unknown-unknown/release/gear_step.wasm
 cp "$WASM" web/gear.wasm
 echo "-> web/gear.wasm  $(wc -c < web/gear.wasm | tr -d ' ') bytes"
 
-# Optional: shrink it if wasm-opt (binaryen) happens to be installed.
+# Optional: shrink it if wasm-opt (binaryen) happens to be installed. Written
+# to the side first, so an old or unhappy wasm-opt cannot leave a broken module
+# behind - we just keep the plain build.
 if command -v wasm-opt >/dev/null 2>&1; then
-    wasm-opt -Oz --enable-bulk-memory -o web/gear.wasm "$WASM"
-    echo "-> wasm-opt   $(wc -c < web/gear.wasm | tr -d ' ') bytes"
+    if wasm-opt -Oz --enable-bulk-memory -o web/gear.opt.wasm "$WASM" 2>/dev/null; then
+        mv web/gear.opt.wasm web/gear.wasm
+        echo "-> wasm-opt   $(wc -c < web/gear.wasm | tr -d ' ') bytes"
+    else
+        rm -f web/gear.opt.wasm
+        echo "-> wasm-opt failed, keeping the plain build"
+    fi
 fi
 
 mkdir -p dist

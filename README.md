@@ -8,7 +8,9 @@ gear-step -z 24 --module 2 --width 12 --bore 20 -o pinion.step
 ```
 
 The same generator also compiles to WebAssembly and runs in a browser with a
-3D viewer and a settings panel - see [In the browser](#in-the-browser).
+3D viewer and a settings panel:
+**<https://christopherhjung.github.io/gear-step/>** - see
+[In the browser](#in-the-browser).
 
 ## What it generates
 
@@ -102,6 +104,13 @@ rustup target add wasm32-unknown-unknown
 |---|---|
 | `web/` | `index.html` + `app.js` + `gear.wasm`, needs any static file server |
 | `dist/gear-step.html` | the same app as **one** file, wasm inlined, opens from disk |
+
+`.github/workflows/pages.yml` runs the tests, builds both, and publishes them
+to GitHub Pages on every push to `main` - the single file version lands next to
+the site as [`gear-step.html`](https://christopherhjung.github.io/gear-step/gear-step.html).
+Pull requests build and test but do not deploy. The workflow needs
+*Settings -> Pages -> Build and deployment -> Source: **GitHub Actions*** set
+once, by hand.
 
 The page has the full parameter set of the CLI, a WebGL viewer for the display
 mesh, the transverse profile with pitch/base/form/root/tip circles, and
