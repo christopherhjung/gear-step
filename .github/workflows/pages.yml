@@ -1,7 +1,13 @@
 # Build the WebAssembly module and publish the gear lab to GitHub Pages.
 #
-# Needs "Settings -> Pages -> Build and deployment -> Source: GitHub Actions"
-# switched on once, by hand.
+# ONE MANUAL STEP, ONCE: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". Without it configure-pages below fails with
+# "Get Pages site failed ... Not Found", because the repository has no Pages
+# site to configure yet.
+#
+# The action can create the site itself with `enablement: true`, but that needs
+# a token with administration:write - GITHUB_TOKEN is not enough - so a PAT in
+# a secret. Flipping the setting by hand is less machinery for a one off.
 
 name: pages
 
@@ -16,16 +22,23 @@ permissions:
   pages: write
   id-token: write
 
-# One deployment at a time; let a newer push cancel a running build.
+# One run at a time per ref, newest wins. Scoped by ref on purpose: with a
+# single shared group a pull request build would cancel a deployment of main
+# that was already in flight.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # Early, so a repository that has not had Pages switched on fails in
+      # seconds instead of after the whole build.
+      - uses: actions/configure-pages@v6
+        if: github.ref == 'refs/heads/main'
 
       - name: Add the wasm target
         run: rustup target add wasm32-unknown-unknown
@@ -53,13 +66,11 @@ jobs:
           mkdir -p _site
           cp web/index.html web/app.js web/style.css web/gear.wasm _site/
           cp dist/gear-step.html _site/          # the same app as one file
-          touch _site/.nojekyll
           ls -l _site
+          # no .nojekyll: an artifact deployment serves the files as they are,
+          # Jekyll never runs, and upload-pages-artifact drops dotfiles anyway
 
-      - uses: actions/configure-pages@v5
-        if: github.ref == 'refs/heads/main'
-
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main'
         with:
           path: _site
@@ -73,4 +84,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

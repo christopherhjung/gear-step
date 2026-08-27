@@ -108,9 +108,13 @@ rustup target add wasm32-unknown-unknown
 `.github/workflows/pages.yml` runs the tests, builds both, and publishes them
 to GitHub Pages on every push to `main` - the single file version lands next to
 the site as [`gear-step.html`](https://christopherhjung.github.io/gear-step/gear-step.html).
-Pull requests build and test but do not deploy. The workflow needs
-*Settings -> Pages -> Build and deployment -> Source: **GitHub Actions*** set
-once, by hand.
+Pull requests build and test but do not deploy.
+
+It needs *Settings -> Pages -> Build and deployment -> Source: **GitHub
+Actions*** set once, by hand. Until that is done `configure-pages` stops with
+*Get Pages site failed ... Not Found*, because there is no Pages site to
+configure yet. The action can create one itself with `enablement: true`, but
+that wants a token with `administration:write`, which `GITHUB_TOKEN` is not.
 
 The page has the full parameter set of the CLI, a WebGL viewer for the display
 mesh, the transverse profile with pitch/base/form/root/tip circles, and
