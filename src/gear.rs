@@ -363,10 +363,17 @@ impl Geom {
     pub fn centre_distance(&self, p: &GearParams) -> (f64, f64) {
         let z = p.z as f64;
         let inv_w = inv(self.alpha_t) + 2.0 * p.x * p.alpha_n.tan() / z;
-        // Deeply negative shifts leave the teeth too thin to ever touch; there
-        // is no such distance then, so fall back on the reference one.
-        let alpha_w = if inv_w > 1e-12 { inv_inverse(inv_w) } else { self.alpha_t };
-        (2.0 * self.r_b / alpha_w.cos(), alpha_w)
+        // A deeply negative shift leaves the teeth too thin to ever touch on
+        // both flanks, and inv falls off the bottom of its range. The limit of
+        // the formula there is contact right down at the base circle, so take
+        // that rather than some other value: a_w then stays continuous in x.
+        let alpha_w = if inv_w > 0.0 { inv_inverse(inv_w) } else { 0.0 };
+        // Whatever the tooth thickness asks for, the tips cannot be driven
+        // into the mating roots. That floor is what a heavily shifted pair
+        // actually runs against, in either direction.
+        let a_w = (2.0 * self.r_b / alpha_w.cos()).max(self.r_a + self.r_f);
+        // report the angle that belongs to the distance we settled on
+        (a_w, (2.0 * self.r_b / a_w).min(1.0).acos())
     }
 
     /// Total angular play of a pair of these gears: how far one can be turned

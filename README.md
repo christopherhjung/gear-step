@@ -131,7 +131,12 @@ A few extras that only make sense interactively:
   distance, `a_w = 2·r_b/cos(alpha_w)` with
   `inv(alpha_w) = inv(alpha_t) + 2·x·tan(alpha_n)/z`, so a profile shifted pair
   meshes tight rather than at the `a + 2·x·m` approximation, which is always a
-  little too wide. It counter-rotates on its own, and for a helical gear it
+  little too wide. Two floors keep that sensible at the extremes: a shift so
+  negative that the teeth can never touch takes the limit of the formula,
+  contact at the base circle, and the pair is never brought closer than the
+  tips meeting the mating roots. Both are continuous in `x`. What neither can
+  rescue is an undercut flank - once the involute has been cut away the
+  profiles are not conjugate at any distance, and the data sheet says so. It counter-rotates on its own, and for a helical gear it
   comes out the opposite hand, which is what a parallel axis pair needs.
 * **spin** - runs the pair as a driveline rather than stepping a fixed angle.
   The slider commands the driver's speed in rev/min; it eases up to that
