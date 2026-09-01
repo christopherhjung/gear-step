@@ -64,7 +64,7 @@ jobs:
       - name: Assemble the site
         run: |
           mkdir -p _site
-          cp web/index.html web/app.js web/style.css web/gear.wasm _site/
+          cp web/index.html web/app.js web/style.css web/gear.wasm web/favicon.svg _site/
           cp dist/gear-step.html _site/          # the same app as one file
           ls -l _site
           # no .nojekyll: an artifact deployment serves the files as they are,

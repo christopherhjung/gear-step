@@ -39,6 +39,13 @@ css = (web / "style.css").read_text()
 js = (web / "app.js").read_text()
 b64 = base64.b64encode((web / "gear.wasm").read_bytes()).decode()
 
+# The icon too - a single file page cannot fetch favicon.svg from anywhere.
+# base64 rather than percent escaping: the SVG is full of quotes and a #rrggbb
+# per colour, and one missed escape silently ends the href attribute.
+icon = base64.b64encode((web / "favicon.svg").read_bytes().strip()).decode()
+html = html.replace('<link rel="icon" href="favicon.svg" type="image/svg+xml">',
+                    '<link rel="icon" href="data:image/svg+xml;base64,' + icon + '">')
+
 html = html.replace('<link rel="stylesheet" href="style.css">',
                     "<style>\n" + css + "\n</style>")
 html = html.replace('<script type="module" src="app.js"></script>',
